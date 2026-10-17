@@ -1,0 +1,7 @@
+build/
+hasil/
+*.apk
+*.keystore
+*.jks
+*.backup*
+*.db

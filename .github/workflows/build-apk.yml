@@ -1,0 +1,101 @@
+name: TEDI E-VOTING - Build APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ambil sumber Android
+        uses: actions/checkout@v4
+
+      - name: Siapkan Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Siapkan Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Pasang Android Build Tools
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Bangun APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+          PLATFORM="$SDK/platforms/android-35/android.jar"
+          BT="$SDK/build-tools/35.0.0"
+          PKG="id.tediberkah.evotingwarga"
+          SRC="src/id/tediberkah/evotingwarga/MainActivity.java"
+          OUT="build"
+
+          test -f "$SRC"
+          test -f "$PLATFORM"
+
+          mkdir -p "$OUT/classes" "$OUT/dex"
+
+          javac \
+            -source 8 -target 8 \
+            -classpath "$PLATFORM" \
+            -d "$OUT/classes" "$SRC"
+
+          "$BT/d8" \
+            --lib "$PLATFORM" \
+            --min-api 23 \
+            --output "$OUT/dex" \
+            "$OUT/classes/id/tediberkah/evotingwarga/MainActivity.class"
+
+          "$BT/aapt" package \
+            -f \
+            -M AndroidManifest.xml \
+            -I "$PLATFORM" \
+            -F "$OUT/base.apk"
+
+          cp "$OUT/base.apk" "$OUT/unsigned.apk"
+          (cd "$OUT/dex" && zip -q -j ../unsigned.apk classes.dex)
+
+          "$BT/zipalign" -f 4 \
+            "$OUT/unsigned.apk" "$OUT/aligned.apk"
+
+          keytool -genkeypair \
+            -keystore "$OUT/build.keystore" \
+            -storepass android \
+            -keypass android \
+            -alias tedi \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 3650 \
+            -dname "CN=TEDI BERKAH, OU=Testing, O=TEDI, C=ID"
+
+          "$BT/apksigner" sign \
+            --ks "$OUT/build.keystore" \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --ks-key-alias tedi \
+            --out "$OUT/tedi-e-voting-warga.apk" \
+            "$OUT/aligned.apk"
+
+          "$BT/apksigner" verify --verbose \
+            "$OUT/tedi-e-voting-warga.apk"
+
+          mkdir -p hasil
+          cp "$OUT/tedi-e-voting-warga.apk" \
+            hasil/tedi-e-voting-warga.apk
+
+      - name: Simpan APK untuk diunduh
+        uses: actions/upload-artifact@v4
+        with:
+          name: tedi-e-voting-warga
+          path: hasil/tedi-e-voting-warga.apk
+          if-no-files-found: error
+          retention-days: 14
