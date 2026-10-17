@@ -23,6 +23,9 @@ jobs:
       - name: Siapkan Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Terima lisensi Android SDK
+        run: yes | sdkmanager --licenses
+
       - name: Pasang Android Build Tools
         run: |
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
